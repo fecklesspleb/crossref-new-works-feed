@@ -1,0 +1,197 @@
+{
+ "status": "ok",
+ "message-type": "work-list",
+ "message-version": "1.0.0",
+ "message": {
+  "facets": {},
+  "next-cursor": "MTc5MzM2Mjg5NDAwMCwxMC4xMDM4JTJGZDQxNTg2LTAyNi0wMzU0OC00",
+  "total-results": 7,
+  "items": [
+   {
+    "publisher": "Springer Science and Business Media LLC",
+    "DOI": "10.1038/d41586-026-03368-6",
+    "type": "journal-article",
+    "created": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ],
+     "date-time": "2026-10-30T10:02:02Z",
+     "timestamp": 1793354522000
+    },
+    "title": [
+     "Somewhere over the transcontinental burrito tunnel"
+    ],
+    "member": "297",
+    "container-title": [
+     "Nature"
+    ],
+    "ISSN": [
+     "0028-0836",
+     "1476-4687"
+    ],
+    "published": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ]
+    }
+   },
+   {
+    "publisher": "Springer Science and Business Media LLC",
+    "DOI": "10.1038/d41586-026-03543-9",
+    "type": "journal-article",
+    "created": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ],
+     "date-time": "2026-10-30T11:17:27Z",
+     "timestamp": 1793359047000
+    },
+    "title": [
+     "Patrick Stewart dies: how Captain Picard inspired today\u2019s science leaders"
+    ],
+    "member": "297",
+    "container-title": [
+     "Nature"
+    ],
+    "ISSN": [
+     "0028-0836",
+     "1476-4687"
+    ],
+    "published": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ]
+    }
+   },
+   {
+    "publisher": "Springer Science and Business Media LLC",
+    "DOI": "10.1038/d41586-026-03512-2",
+    "type": "journal-article",
+    "created": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ],
+     "date-time": "2026-10-30T11:27:26Z",
+     "timestamp": 1793359646000
+    },
+    "title": [
+     "Are dinosaur fossils hogging top journals? Analysis sparks debate over \u2018charismatic\u2019 finds"
+    ],
+    "member": "297",
+    "container-title": [
+     "Nature"
+    ],
+    "ISSN": [
+     "0028-0836",
+     "1476-4687"
+    ],
+    "published": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ]
+    }
+   },
+   {
+    "publisher": "Springer Science and Business Media LLC",
+    "DOI": "10.1038/d41586-026-03502-4",
+    "type": "journal-article",
+    "created": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ],
+     "date-time": "2026-10-30T12:12:31Z",
+     "timestamp": 1793362351000
+    },
+    "title": [
+     "I built the UK government\u2019s metascience unit \u2014 here\u2019s what countries need to know"
+    ],
+    "member": "297",
+    "container-title": [
+     "Nature"
+    ],
+    "ISSN": [
+     "0028-0836",
+     "1476-4687"
+    ],
+    "published": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ]
+    }
+   },
+   {
+    "publisher": "Springer Science and Business Media LLC",
+    "DOI": "10.1038/d41586-026-03548-4",
+    "type": "journal-article",
+    "created": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ],
+     "date-time": "2026-10-30T12:21:34Z",
+     "timestamp": 1793362894000
+    },
+    "title": [
+     "Daily briefing: The three red flags of suspicious journals"
+    ],
+    "member": "297",
+    "container-title": [
+     "Nature"
+    ],
+    "ISSN": [
+     "0028-0836",
+     "1476-4687"
+    ],
+    "published": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       29
+      ]
+     ]
+    }
+   }
+  ],
+  "items-per-page": 5,
+  "query": {
+   "start-index": 0,
+   "search-terms": null
+  }
+ }
+}

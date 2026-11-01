@@ -1,0 +1,62 @@
+name: Crossref new works feed
+
+on:
+  schedule:
+    - cron: "23 6 * * *"   # every day at 06:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: crossref-new-works-feed
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run offline tests
+        run: python -m unittest -v
+
+      - name: Fetch new works
+        env:
+          # Optional repository variables (Settings > Secrets and variables > Actions > Variables).
+          CROSSREF_MAILTO: ${{ vars.CROSSREF_MAILTO }}  # your contact email, for Crossref's polite pool
+          ISSNS: ${{ vars.ISSNS }}                      # comma separated; default 0028-0836 (Nature)
+          QUERY: ${{ vars.QUERY }}                      # bibliographic keywords
+          TITLE_WORDS: ${{ vars.TITLE_WORDS }}          # comma separated; every word must be in the title
+          MAX_WORKS: ${{ vars.MAX_WORKS }}              # default 5000
+        run: |
+          args=(--days 1 --max-works "${MAX_WORKS:-5000}")
+          IFS=',' read -ra issns <<< "${ISSNS:-0028-0836}"
+          for i in "${issns[@]}"; do
+            i="$(echo "$i" | xargs)"
+            if [ -n "$i" ]; then args+=(--issn "$i"); fi
+          done
+          IFS=',' read -ra words <<< "${TITLE_WORDS}"
+          for w in "${words[@]}"; do
+            w="$(echo "$w" | xargs)"
+            if [ -n "$w" ]; then args+=(--title-word "$w"); fi
+          done
+          if [ -n "${QUERY}" ]; then args+=(--query "${QUERY}"); fi
+          python new_works.py "${args[@]}"
+
+      - name: Commit the CSVs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/works.csv data/new_works.csv data/seen_dois.txt
+          if git diff --cached --quiet; then
+            echo "No change"
+          else
+            git commit -m "New Crossref works $(date -u +%Y-%m-%d)"
+            git push
+          fi

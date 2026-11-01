@@ -1,0 +1,89 @@
+{
+ "status": "ok",
+ "message-type": "work-list",
+ "message-version": "1.0.0",
+ "message": {
+  "facets": {},
+  "next-cursor": "MTc5MzM3OTEwNzAwMCwxMC4xMDM4JTJGZDQxNTg2LTAyNi0wMzU1My03",
+  "total-results": 7,
+  "items": [
+   {
+    "publisher": "Springer Science and Business Media LLC",
+    "DOI": "10.1038/s41586-026-11337-2",
+    "type": "journal-article",
+    "created": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ],
+     "date-time": "2026-10-30T13:01:41Z",
+     "timestamp": 1793365301000
+    },
+    "title": [
+     "Author Correction: Rh3+ stabilized in KRh@MFI catalyses regioselective hydroformylation"
+    ],
+    "member": "297",
+    "container-title": [
+     "Nature"
+    ],
+    "ISSN": [
+     "0028-0836",
+     "1476-4687"
+    ],
+    "published": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ]
+    }
+   },
+   {
+    "publisher": "Springer Science and Business Media LLC",
+    "DOI": "10.1038/d41586-026-03553-7",
+    "type": "journal-article",
+    "created": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ],
+     "date-time": "2026-10-30T16:51:47Z",
+     "timestamp": 1793379107000
+    },
+    "title": [
+     "Briefing Chat: Dog years: could longevity science extend your pets' lives?"
+    ],
+    "member": "297",
+    "container-title": [
+     "Nature"
+    ],
+    "ISSN": [
+     "0028-0836",
+     "1476-4687"
+    ],
+    "published": {
+     "date-parts": [
+      [
+       2026,
+       10,
+       30
+      ]
+     ]
+    }
+   }
+  ],
+  "items-per-page": 5,
+  "query": {
+   "start-index": 0,
+   "search-terms": null
+  }
+ }
+}
