@@ -34,6 +34,11 @@ jobs:
           QUERY: ${{ vars.QUERY }}                      # bibliographic keywords
           TITLE_WORDS: ${{ vars.TITLE_WORDS }}          # comma separated; every word must be in the title
           MAX_WORKS: ${{ vars.MAX_WORKS }}              # default 5000
+          # Leave WORKS_SOURCE unset (or "public") to call the Crossref API for free.
+          # Set the repository variable WORKS_SOURCE=apify and the secret APIFY_TOKEN to use the Actor.
+          WORKS_SOURCE: ${{ vars.WORKS_SOURCE || 'public' }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          APIFY_MAX_USD: ${{ vars.APIFY_MAX_USD || '0.50' }}
         run: |
           args=(--days 1 --max-works "${MAX_WORKS:-5000}")
           IFS=',' read -ra issns <<< "${ISSNS:-0028-0836}"
