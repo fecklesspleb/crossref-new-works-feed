@@ -1,0 +1,36 @@
+[
+  {
+    "doi": "10.1038/s41586-026-11328-3",
+    "doiUrl": "https://doi.org/10.1038/s41586-026-11328-3",
+    "type": "journal-article",
+    "title": "ctDNA clearance and outcomes for resectable lung cancer from NeoCOAST-2",
+    "containerTitle": "Nature",
+    "issns": [
+      "0028-0836",
+      "1476-4687"
+    ],
+    "publisher": "Springer Science and Business Media LLC",
+    "crossrefMemberId": "297",
+    "publishedDate": "2026-10-25",
+    "createdAt": "2026-10-25T07:01:31Z"
+  },
+  {
+    "doi": "10.1038/s41586-026-99999-9",
+    "doiUrl": "https://doi.org/10.1038/s41586-026-99999-9",
+    "type": "journal-article",
+    "title": "Climate adaptation in coastal wetlands",
+    "containerTitle": "Nature",
+    "issns": [
+      "0028-0836"
+    ],
+    "publisher": "Springer Science and Business Media LLC",
+    "crossrefMemberId": "297",
+    "publishedDate": "2026-10-26",
+    "createdAt": "2026-10-26T08:00:00Z"
+  },
+  {
+    "type": "status",
+    "status": "warning",
+    "message": "Sample status record, not a work"
+  }
+]

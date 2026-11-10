@@ -1,0 +1,176 @@
+{
+  "title": "Crossref New Works Feed input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "mode": {
+      "title": "Mode",
+      "type": "string",
+      "editor": "select",
+      "enum": [
+        "daily_feed",
+        "date_range"
+      ],
+      "enumTitles": [
+        "Daily feed (last N days, only new since last run)",
+        "Date range"
+      ],
+      "default": "daily_feed",
+      "description": "Daily feed: works from the last N days, skipping DOIs already saved by earlier runs with the same state key. Date range: everything between two dates."
+    },
+    "lookbackDays": {
+      "title": "Look back (days)",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 90,
+      "default": 1,
+      "description": "Daily feed only. 0 = today only (UTC), 1 = yesterday and today."
+    },
+    "startDate": {
+      "title": "Start date",
+      "type": "string",
+      "editor": "datepicker",
+      "description": "Date range only, e.g. 2026-10-01 (UTC, inclusive)."
+    },
+    "endDate": {
+      "title": "End date",
+      "type": "string",
+      "editor": "datepicker",
+      "description": "Date range only (inclusive). Empty = today."
+    },
+    "dateField": {
+      "title": "Date field",
+      "type": "string",
+      "editor": "select",
+      "enum": [
+        "created",
+        "published",
+        "indexed",
+        "deposited"
+      ],
+      "enumTitles": [
+        "Created (DOI first registered) - best for new works",
+        "Published (print or online)",
+        "Indexed (any change in Crossref)",
+        "Deposited (metadata last deposited)"
+      ],
+      "default": "created",
+      "description": "Which Crossref date the range and the newest-first order use."
+    },
+    "types": {
+      "title": "Work types",
+      "type": "array",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "journal-article",
+          "proceedings-article",
+          "book-chapter",
+          "book",
+          "monograph",
+          "edited-book",
+          "reference-entry",
+          "posted-content",
+          "dissertation",
+          "report",
+          "dataset",
+          "standard",
+          "peer-review",
+          "component",
+          "journal-issue",
+          "grant",
+          "other"
+        ]
+      },
+      "prefill": [
+        "journal-article"
+      ],
+      "default": [
+        "journal-article"
+      ],
+      "description": "Crossref work types. Empty list = all types. Default: journal articles."
+    },
+    "query": {
+      "title": "Keywords",
+      "type": "string",
+      "editor": "textfield",
+      "description": "Optional bibliographic keywords (title, journal, ...). Results are still sorted newest first by the chosen date field, not by relevance, and the date range still applies. Crossref's keyword matching is loose: not every result contains every word (in one test only 28 of 246 'perovskite solar' matches had both words in the title). For precision, use filters (ISSN, DOI prefix, member, funder, type) or a narrower phrase."
+    },
+    "issns": {
+      "title": "Journal ISSNs",
+      "type": "array",
+      "editor": "stringList",
+      "description": "Only works in these journals, e.g. 0028-0836. Up to 50."
+    },
+    "doiPrefixes": {
+      "title": "DOI prefixes",
+      "type": "array",
+      "editor": "stringList",
+      "description": "Only works with these DOI prefixes, e.g. 10.1038. Up to 50."
+    },
+    "memberIds": {
+      "title": "Crossref member IDs",
+      "type": "array",
+      "editor": "stringList",
+      "description": "Only works from these publishers (Crossref member id, e.g. 297 = Springer). Up to 50."
+    },
+    "funderDois": {
+      "title": "Funder DOIs",
+      "type": "array",
+      "editor": "stringList",
+      "description": "Only works acknowledging these funders (Open Funder Registry DOI, e.g. 10.13039/100000001 = NSF). Up to 50."
+    },
+    "hasAbstract": {
+      "title": "Only works with an abstract on file",
+      "type": "boolean",
+      "default": false,
+      "description": "The abstract itself is never output."
+    },
+    "hasFunder": {
+      "title": "Only works with funding information",
+      "type": "boolean",
+      "default": false,
+      "description": "Only works whose Crossref record lists at least one funder."
+    },
+    "creativeCommonsOnly": {
+      "title": "Only Creative Commons licensed works",
+      "type": "boolean",
+      "default": false,
+      "description": "Keep only works whose Crossref licence list includes a creativecommons.org licence."
+    },
+    "maxItems": {
+      "title": "Max works",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000,
+      "default": 9,
+      "description": "Stop after this many works (charged per work). Default 9 (about $0.009), also when left empty. Minimum 1, maximum 100,000; there is no unlimited setting. A weekday brings roughly 27,000 to 35,000 new journal articles, so for a complete daily feed use filters and set this above your expected daily count.",
+      "prefill": 9
+    },
+    "onlyNewSinceLastRun": {
+      "title": "Only new since last run",
+      "type": "string",
+      "editor": "select",
+      "enum": [
+        "auto",
+        "yes",
+        "no"
+      ],
+      "enumTitles": [
+        "Auto (daily feed: yes, date range: no)",
+        "Yes",
+        "No"
+      ],
+      "default": "auto",
+      "description": "Skip DOIs saved by earlier runs with the same state key. Each state key remembers at most 200,000 DOIs. Beyond that, the earliest-saved DOIs are dropped from the list, so they can be returned (and charged) again if they are still inside the date range of a later run."
+    },
+    "stateKey": {
+      "title": "State key",
+      "type": "string",
+      "editor": "textfield",
+      "default": "default",
+      "description": "Use different keys for different scheduled feeds so they keep separate 'seen' lists."
+    }
+  }
+}
