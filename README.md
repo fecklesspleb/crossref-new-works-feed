@@ -59,7 +59,9 @@ Options:
 --title-word WORD     keep only titles containing WORD, repeatable (all must match)
 --max-works N         stop after N new works (default 5000); the next run carries on
 --out-dir PATH        default data
---dry-run             print the first request URL and the User-Agent, no network
+--source public|apify default public (or env WORKS_SOURCE)
+--max-usd 0.50        apify only: hard cap on what one run can charge (or env APIFY_MAX_USD)
+--dry-run             print the first request URL and the User-Agent (public), or the Actor request (apify), no network
 ```
 
 Filters of the same kind are combined with OR (two ISSNs means either journal). Different kinds are combined with AND.
@@ -90,12 +92,36 @@ To set it up:
    - `QUERY` and `TITLE_WORDS` (comma separated).
    - `MAX_WORKS`.
    - `CROSSREF_MAILTO`: your contact email.
+   - To use the hosted Actor instead of the Crossref API: variable `WORKS_SOURCE` = `apify`, secret `APIFY_TOKEN`, and optionally variable `APIFY_MAX_USD` (default 0.50).
 3. Open the Actions tab, enable workflows if asked, and run **Crossref new works feed** once by hand.
 
 Things to know:
 - **Keep the feed narrow.** A weekday brings roughly 27,000 to 30,000 new journal articles (Crossref counts for 28 to 30 October 2026). Each CSV row is about 330 bytes, so an unfiltered feed would add about 9 MB a day to `works.csv`.
 - **Look-back.** The default look-back of yesterday plus today overlaps the previous run, so works that reach the API late are still caught, and the seen list stops repeats.
 - **Scheduled workflows can switch off.** GitHub disables scheduled workflows in public repositories after 60 days with no repository activity, and scheduled workflows are off by default in a fork.
+
+
+## Or run it on Apify instead
+
+The script above is free and runs anywhere Python does. If you'd rather not keep a runner or a cron job alive, the same feed is on the Apify Store as **crossref-new-works-feed**. Apify runs it on a schedule, keeps the results as a dataset and can send them on to email, Slack, Google Sheets, n8n, Make or Zapier.
+
+You can also call the hosted version from this repo:
+
+```bash
+export APIFY_TOKEN=...   # from Apify Console > Settings > API & Integrations
+python3 new_works.py --source apify --query "climate adaptation" --days 1 --dry-run   # check the request first
+python3 new_works.py --source apify --query "climate adaptation" --days 1
+```
+
+With `--source apify`, the script starts the Apify Actor, waits for it to finish and writes the same output files as a local run (`data/new_works.csv`, `data/works.csv`, `data/seen_dois.txt`). The token is sent in the `Authorization` header, never in the URL. `--max-usd` (default 0.50, or env `APIFY_MAX_USD`) is sent as `maxTotalChargeUsd`, which stops the run at your cap. The Actor costs $0.001 per work returned (pay per event, event `work`); there is no separate start fee.
+
+`--date-field update` is not available with `--source apify` (the Actor has no equivalent). `--date-field index` is sent as the Actor's `indexed`. `--title-word` is applied after the Actor returns, so dropped works may still have been charged. Without `--source apify`, nothing changes: the script calls the Crossref API directly, for free.
+
+Which one to pick:
+- **Local (default):** free, and you own the scheduling and the storage.
+- **Apify:** pay-per-result on Apify's pricing. Scheduling, retries, storage and integrations are handled for you.
+
+Apify Store page: https://apify.com/fecklesspleb/crossref-new-works-feed
 
 ## Being polite to Crossref
 
@@ -147,7 +173,8 @@ LIVE=1 python3 -m unittest tests.test_live -v  # also about 8 requests to api.cr
 - `robots.txt`;
 - date-parts parsing;
 - deduplication across two runs and within one run;
-- the `--max-works` carry-over and the title-word filter.
+- the `--max-works` carry-over and the title-word filter;
+- the exact Apify request (URL, cost cap, header, body fields against the Actor's input schema), that non-work records are dropped, the 408 timeout path, and that the default `--source public` path is unchanged.
 
 **Live tests** check:
 - that cursor paging with 2 rows returns the same DOIs as one page;

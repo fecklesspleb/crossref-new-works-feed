@@ -24,6 +24,13 @@ API = "https://api.crossref.org"
 WORKS_URL = API + "/works"
 REPO_URL = "https://github.com/fecklesspleb/crossref-new-works-feed"
 VERSION = "1.0"
+APIFY_ACTOR = "fecklesspleb~crossref-new-works-feed"
+APIFY_BASE = "https://api.apify.com/v2"
+# Local --date-field names -> Actor dateField values. "update" has no Actor equivalent.
+APIFY_DATE_FIELD = {"created": "created", "index": "indexed"}
+APIFY_STATE_KEY = "crossref-new-works-feed"
+APIFY_MAX_ITEMS = 100000
+APIFY_MAX_LOOKBACK = 90
 
 # Crossref limits list/filter requests to 1 per second in the public pool and 3 per second
 # in the polite pool (July 2026). We stay at 1 per second, one request at a time, in both.
@@ -326,6 +333,123 @@ def new_rows(items: list, seen: set, seen_at: str, limit: int | None = None):
     return out, left_over
 
 
+# ---------------------------------------------------------------- Apify Actor
+
+def actor_date_field(local_field: str) -> str:
+    """Map this script's --date-field to the Actor's dateField. 'update' is not on the Actor."""
+    if local_field in APIFY_DATE_FIELD:
+        return APIFY_DATE_FIELD[local_field]
+    raise ValueError(
+        f"--date-field {local_field} is not available with --source apify "
+        f"(the Actor accepts created, published, indexed, deposited; "
+        f"this script's 'update' has no Actor equivalent)"
+    )
+
+
+def is_work_item(item: dict) -> bool:
+    """Keep real work records; drop status messages or anything without a DOI."""
+    if not isinstance(item, dict):
+        return False
+    if item.get("type") == "status":
+        return False
+    if item.get("status") not in (None, "active"):
+        return False
+    return bool((item.get("doi") or "").strip())
+
+
+def from_actor_item(item: dict, seen_at: str) -> dict:
+    doi = (item.get("doi") or "").strip()
+    issns = item.get("issns") or []
+    if not issns:
+        issns = [v for v in (item.get("issnPrint"), item.get("issnElectronic")) if v]
+    url = (item.get("doiUrl") or "").strip() or (f"https://doi.org/{doi}" if doi else "")
+    return {
+        "doi": doi,
+        "type": item.get("type") or "",
+        "title": re.sub(r"\s+", " ", str(item.get("title") or "").strip()),
+        "journal": item.get("containerTitle") or "",
+        "issn": "|".join(issns),
+        "publisher": item.get("publisher") or "",
+        "member": str(item.get("crossrefMemberId") or ""),
+        "published": item.get("publishedDate") or "",
+        "created": item.get("createdAt") or "",
+        "url": url,
+        "first_seen": seen_at,
+    }
+
+
+def actor_title_filter(words):
+    """Like title_filter, but the Actor's title is a string, not a list."""
+    words = [w.lower() for w in words if w.strip()]
+    if not words:
+        return None
+
+    def keep(item):
+        title = str(item.get("title") or "").lower()
+        return all(w in title for w in words)
+    return keep
+
+
+def actor_input(args, today: dt.date) -> dict:
+    """Build the Actor input from the same flags as a local run. Field names match the
+    deployed input schema (crossref-new-works-feed version 0.2 / 1.0 source)."""
+    date_field = actor_date_field(args.date_field)
+    max_items = min(max(1, args.max_works), APIFY_MAX_ITEMS)
+    types = [] if args.types == ["all"] else (args.types or ["journal-article"])
+    body = {
+        "dateField": date_field,
+        "types": types,
+        "maxItems": max_items,
+        "onlyNewSinceLastRun": "auto",
+        "stateKey": APIFY_STATE_KEY,
+    }
+    if args.from_date or args.until_date:
+        start, end = date_window(args, today)
+        body["mode"] = "date_range"
+        body["startDate"] = start.isoformat()
+        body["endDate"] = end.isoformat()
+    else:
+        if args.days > APIFY_MAX_LOOKBACK:
+            raise ValueError(
+                f"--days {args.days} is above the Actor's lookbackDays maximum of {APIFY_MAX_LOOKBACK}"
+            )
+        body["mode"] = "daily_feed"
+        body["lookbackDays"] = max(0, args.days)
+    if args.query:
+        body["query"] = args.query
+    if args.issn:
+        body["issns"] = [normalize_issn(i) for i in args.issn]
+    if args.member:
+        body["memberIds"] = list(args.member)
+    if args.prefix:
+        body["doiPrefixes"] = list(args.prefix)
+    if args.funder:
+        body["funderDois"] = list(args.funder)
+    return body
+
+
+def apify_fetch(url: str, data: bytes, headers: dict, timeout: float = 320):
+    """POST JSON to one URL and return the parsed body. Tests replace this; the default
+    is unused in the offline test suite."""
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def run_actor(body: dict, token: str, max_usd: float, fetch=apify_fetch) -> list:
+    qs = urllib.parse.urlencode({"maxTotalChargeUsd": max_usd, "timeout": 280, "clean": "true"})
+    url = f"{APIFY_BASE}/acts/{APIFY_ACTOR}/run-sync-get-dataset-items?{qs}"
+    items = fetch(
+        url,
+        data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        timeout=320,
+    )
+    if not isinstance(items, list):
+        raise RuntimeError(f"Unexpected Apify response: {str(items)[:300]}")
+    return items
+
+
 # ---------------------------------------------------------------- CLI
 
 def parse_args(argv=None):
@@ -344,7 +468,12 @@ def parse_args(argv=None):
     p.add_argument("--title-word", action="append", default=[], help="keep only titles containing this word, repeatable (all must match)")
     p.add_argument("--max-works", type=int, default=5000, help="stop after this many new works (default 5000); the next run carries on")
     p.add_argument("--out-dir", default="data", help="where the CSVs and seen_dois.txt go (default data)")
-    p.add_argument("--dry-run", action="store_true", help="print the first request URL and exit, no network")
+    p.add_argument("--source", choices=["public", "apify"],
+                   default=os.environ.get("WORKS_SOURCE") or "public",
+                   help="public (default): call the Crossref API directly; apify: run the hosted Actor")
+    p.add_argument("--max-usd", type=float, default=float(os.environ.get("APIFY_MAX_USD") or "0.50"),
+                   help="apify only: hard cap on what one run can charge (default 0.50)")
+    p.add_argument("--dry-run", action="store_true", help="print the first request URL (public) or the Actor request (apify) and exit, no network")
     a = p.parse_args(argv)
     if a.max_works < 1:
         p.error("--max-works must be at least 1")
@@ -357,16 +486,24 @@ def date_window(args, today: dt.date):
     return start, end
 
 
-def main(argv=None, http=urllib_http, sleep=time.sleep, env=os.environ, now=None) -> int:
+def main(argv=None, http=urllib_http, sleep=time.sleep, env=os.environ, now=None,
+         apify_fetch_fn=apify_fetch) -> int:
     args = parse_args(argv)
     now = now or dt.datetime.now(dt.timezone.utc)
     types = [] if args.types == ["all"] else (args.types or ["journal-article"])
     try:
         start, end = date_window(args, now.date())
-        filt = build_filter(args.date_field, start, end, types, args.issn, args.member, args.prefix, args.funder)
+        if args.source == "apify":
+            body = actor_input(args, now.date())
+        else:
+            filt = build_filter(args.date_field, start, end, types, args.issn, args.member, args.prefix, args.funder)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+
+    if args.source == "apify":
+        return _main_apify(args, body, start, end, env, now, apify_fetch_fn)
+
     if (env.get("CROSSREF_MAILTO") or "").strip() and not contact_email(env):
         print("warning: CROSSREF_MAILTO is not a valid email address; using the public pool", file=sys.stderr)
     mailto = contact_email(env)
@@ -404,6 +541,65 @@ def main(argv=None, http=urllib_http, sleep=time.sleep, env=os.environ, now=None
         print(f"warning: stopped at --max-works {args.max_works} new works before the end of the {total} matches. "
               f"The rest are not marked as seen, so the next run continues; raise --max-works or narrow the "
               f"filters if you need them all now.", file=sys.stderr)
+    return 0
+
+
+def _main_apify(args, body, start, end, env, now, fetch_fn) -> int:
+    if args.dry_run:
+        print(json.dumps({"actor": APIFY_ACTOR, "maxTotalChargeUsd": args.max_usd, "input": body}, indent=2))
+        return 0
+    token = env.get("APIFY_TOKEN")
+    if not token:
+        print("Set APIFY_TOKEN (Apify Console > Settings > API & Integrations).", file=sys.stderr)
+        return 2
+    try:
+        items = run_actor(body, token, args.max_usd, fetch=fetch_fn)
+    except urllib.error.HTTPError as e:
+        if e.code == 408:
+            print("The run did not finish within run-sync's 300 s limit. Narrow the filters or lower --max-works.",
+                  file=sys.stderr)
+        else:
+            print(f"Apify API error {e.code}: {e.read()[:300]!r}", file=sys.stderr)
+        return 1
+    except (ValueError, RuntimeError, urllib.error.URLError, TimeoutError, OSError) as e:
+        print(f"error: {e}. Nothing was written; the next run will try again.", file=sys.stderr)
+        return 1
+
+    for i in items:
+        if i.get("type") == "status":
+            print("note:", i.get("message"), file=sys.stderr)
+
+    keep = actor_title_filter(args.title_word)
+    works = [i for i in items if is_work_item(i) and (keep is None or keep(i))]
+    out = Path(args.out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    seen_path = out / "seen_dois.txt"
+    seen = load_seen(seen_path)
+    seen_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    rows, left_over = [], 0
+    for item in works:
+        key = (item.get("doi") or "").strip().lower()
+        if not key or key in seen:
+            continue
+        if len(rows) >= args.max_works:
+            left_over += 1
+            continue
+        seen.add(key)
+        rows.append(from_actor_item(item, seen_at))
+    write_csv(out / "new_works.csv", rows, append=False)
+    write_csv(out / "works.csv", rows, append=True)
+    save_seen(seen_path, seen)
+
+    dropped = len([i for i in items if is_work_item(i)]) - len(works)
+    print(f"{start}..{end} by {args.date_field} date: {len(items)} records from Apify, "
+          f"{len(works)} works{'' if keep is None else ' with the title words'}, "
+          f"{len(rows)} new, source apify, cap ${args.max_usd:.2f}")
+    if dropped and keep is not None:
+        print(f"note: {dropped} work(s) were dropped by --title-word after the Actor returned them; "
+              f"they may still have been charged.", file=sys.stderr)
+    if left_over:
+        print(f"warning: stopped at --max-works {args.max_works} new works before the end of the Actor results. "
+              f"The rest are not marked as seen, so the next run continues.", file=sys.stderr)
     return 0
 
 
