@@ -1,5 +1,8 @@
 """Offline tests: no network. Saved Crossref responses live in tests/fixtures (captured 1 November 2026)."""
 import contextlib
+import json
+import os
+import urllib.error
 import csv
 import datetime as dt
 import io
@@ -292,3 +295,163 @@ class EndToEnd(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ApifySource(unittest.TestCase):
+    """Offline --source apify tests. A stand-in returns fixtures; nothing contacts api.apify.com."""
+
+    def setUp(self):
+        self.items = fixture_json("apify_items.json")
+        self.calls = []
+
+    def fetch(self, url, data=None, headers=None, timeout=320):
+        self.calls.append({"url": url, "data": data, "headers": headers or {}})
+        return self.items
+
+    def _run(self, extra, out_dir, env=None, fetch=None):
+        err = io.StringIO()
+        argv = ["--source", "apify", "--days", "1", "--out-dir", str(out_dir)] + list(extra)
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()) as out:
+            code = nw.main(
+                argv,
+                http=FakeHTTP(),
+                env=env if env is not None else {"APIFY_TOKEN": "test-token"},
+                now=NOW,
+                apify_fetch_fn=fetch or self.fetch,
+            )
+        return code, out.getvalue(), err.getvalue()
+
+    def test_default_source_is_public(self):
+        self.assertEqual(nw.parse_args([]).source, "public")
+        self.assertEqual(nw.parse_args(["--issn", "0028-0836"]).source, "public")
+
+    def test_dry_run_prints_request_and_makes_no_call(self):
+        err, out = io.StringIO(), io.StringIO()
+        argv = ["--source", "apify", "--query", "climate adaptation", "--days", "1", "--dry-run"]
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
+            code = nw.main(argv, http=FakeHTTP(), env={}, now=NOW, apify_fetch_fn=self.fetch)
+        self.assertEqual(code, 0)
+        self.assertEqual(self.calls, [])
+        payload = json.loads(out.getvalue())
+        self.assertEqual(payload["actor"], "fecklesspleb~crossref-new-works-feed")
+        self.assertEqual(payload["maxTotalChargeUsd"], 0.5)
+        self.assertEqual(payload["input"]["query"], "climate adaptation")
+        self.assertEqual(payload["input"]["mode"], "daily_feed")
+        self.assertEqual(payload["input"]["lookbackDays"], 1)
+        self.assertEqual(payload["input"]["dateField"], "created")
+        self.assertEqual(payload["input"]["types"], ["journal-article"])
+        self.assertEqual(payload["input"]["onlyNewSinceLastRun"], "auto")
+        self.assertEqual(payload["input"]["stateKey"], "crossref-new-works-feed")
+        self.assertEqual(payload["input"]["maxItems"], 5000)
+
+    def test_request_shape_filtering_and_columns(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            code, out, err = self._run(["--query", "climate adaptation", "--max-usd", "0.25"], d)
+            self.assertEqual(code, 0)
+            self.assertEqual(len(self.calls), 1)
+            call = self.calls[0]
+            self.assertIn("/acts/fecklesspleb~crossref-new-works-feed/run-sync-get-dataset-items?", call["url"])
+            self.assertIn("maxTotalChargeUsd=0.25", call["url"])
+            self.assertIn("timeout=280", call["url"])
+            self.assertIn("clean=true", call["url"])
+            self.assertEqual(call["headers"]["Authorization"], "Bearer test-token")
+            self.assertNotIn("test-token", call["url"])
+            body = json.loads(call["data"])
+            self.assertEqual(body["query"], "climate adaptation")
+            self.assertEqual(body["mode"], "daily_feed")
+            rows = read_csv(d / "new_works.csv")
+            self.assertEqual([r["doi"] for r in rows],
+                             ["10.1038/s41586-026-11328-3", "10.1038/s41586-026-99999-9"])
+            self.assertEqual(rows[0]["journal"], "Nature")
+            self.assertEqual(rows[0]["issn"], "0028-0836|1476-4687")
+            self.assertEqual(rows[0]["member"], "297")
+            self.assertEqual(rows[0]["url"], "https://doi.org/10.1038/s41586-026-11328-3")
+            self.assertEqual(rows[0]["first_seen"], "2026-11-01T16:00:00Z")
+            self.assertEqual(list(rows[0].keys()), list(nw.COLUMNS))
+            self.assertIn("Sample status record", err)
+            self.calls.clear()
+            code, out, err = self._run(["--query", "climate adaptation", "--max-usd", "0.25"], d)
+            self.assertEqual(code, 0)
+            self.assertEqual(read_csv(d / "new_works.csv"), [])
+            self.assertEqual(len(read_csv(d / "works.csv")), 2)
+
+    def test_input_fields_exist_in_actor_schema(self):
+        schema = fixture_json("crossref_new_works_feed_input_schema.json")
+        args = nw.parse_args(["--source", "apify", "--query", "climate adaptation", "--days", "1",
+                              "--issn", "0028-0836", "--member", "297", "--prefix", "10.1038",
+                              "--funder", "10.13039/100000001", "--type", "journal-article"])
+        body = nw.actor_input(args, NOW.date())
+        self.assertEqual(set(body) - set(schema["properties"]), set())
+
+    def test_date_range_and_index_mapping(self):
+        args = nw.parse_args(["--source", "apify", "--from-date", "2026-10-25", "--until-date", "2026-11-01",
+                              "--date-field", "index", "--issn", "0028-0836"])
+        body = nw.actor_input(args, NOW.date())
+        self.assertEqual(body["mode"], "date_range")
+        self.assertEqual(body["startDate"], "2026-10-25")
+        self.assertEqual(body["endDate"], "2026-11-01")
+        self.assertEqual(body["dateField"], "indexed")
+        self.assertEqual(body["issns"], ["0028-0836"])
+        self.assertNotIn("lookbackDays", body)
+
+    def test_type_all_sends_empty_types(self):
+        args = nw.parse_args(["--source", "apify", "--type", "all", "--days", "1"])
+        body = nw.actor_input(args, NOW.date())
+        self.assertEqual(body["types"], [])
+
+    def test_update_date_field_is_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            code, out, err = self._run(["--date-field", "update"], Path(d), env={"APIFY_TOKEN": "t"})
+            self.assertEqual(code, 2)
+            self.assertIn("update", err)
+            self.assertEqual(self.calls, [])
+
+    def test_days_over_actor_limit_is_rejected(self):
+        err, out = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
+            code = nw.main(["--source", "apify", "--days", "91", "--dry-run"],
+                           env={}, now=NOW, apify_fetch_fn=self.fetch)
+        self.assertEqual(code, 2)
+        self.assertIn("90", err.getvalue())
+
+    def test_title_word_applied_after_and_not_marked_seen(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            code, out, err = self._run(["--title-word", "climate"], d)
+            self.assertEqual(code, 0)
+            rows = read_csv(d / "new_works.csv")
+            self.assertEqual([r["doi"] for r in rows], ["10.1038/s41586-026-99999-9"])
+            self.assertIn("may still have been charged", err)
+            seen = (d / "seen_dois.txt").read_text(encoding="utf-8")
+            self.assertIn("10.1038/s41586-026-99999-9", seen)
+            self.assertNotIn("10.1038/s41586-026-11328-3", seen)
+
+    def test_missing_token(self):
+        with tempfile.TemporaryDirectory() as d:
+            code, out, err = self._run([], Path(d), env={})
+            self.assertEqual(code, 2)
+            self.assertIn("APIFY_TOKEN", err)
+            self.assertEqual(self.calls, [])
+            self.assertFalse(list(Path(d).glob("*.csv")))
+
+    def test_sync_timeout_message(self):
+        def boom(*a, **k):
+            raise urllib.error.HTTPError("u", 408, "Request Timeout", {}, io.BytesIO(b""))
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            code, out, err = self._run([], d, fetch=boom)
+            self.assertEqual(code, 1)
+            self.assertIn("300 s", err)
+            self.assertFalse((d / "works.csv").exists())
+
+    def test_public_path_does_not_call_apify(self):
+        def boom(*a, **k):
+            raise AssertionError("apify fetch should not be used for --source public")
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                code = nw.main(NATURE_ARGS + ["--out-dir", str(d)], http=FakeHTTP(nature_routes()),
+                               env={}, now=NOW, apify_fetch_fn=boom)
+            self.assertEqual(code, 0)
+            self.assertTrue((d / "new_works.csv").exists())
